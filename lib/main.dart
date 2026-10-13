@@ -15,7 +15,7 @@ class TriviaGameApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Roboto',
-        primarySwatch: Colors.deepPurple,
+        brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF1A1A2E),
       ),
       home: const CategorySelectionScreen(),
@@ -23,7 +23,7 @@ class TriviaGameApp extends StatelessWidget {
   }
 }
 
-// --- نموذج البيانات (Data Models) ---
+// --- نماذج البيانات (Data Models) ---
 class Question {
   final String text;
   final List<String> options;
@@ -52,13 +52,13 @@ class Category {
   });
 }
 
-// --- قاعة البيانات المدمجة للأسئلة ---
+// --- قاعدة البيانات المدمجة لجميع الفئات ---
 final List<Category> sampleCategories = [
   Category(
     id: 'quran',
     title: 'القرآن الكريم',
     icon: Icons.menu_book_rounded,
-    color: Colors.emerald,
+    color: Colors.green,
     questions: [
       Question(
         text: 'ما هي أطول سورة في القرآن الكريم؟',
@@ -81,7 +81,7 @@ final List<Category> sampleCategories = [
     id: 'islamic',
     title: 'أسئلة دينية',
     icon: Icons.mosque_rounded,
-    color: Colors.amber.shade700,
+    color: Colors.amber,
     questions: [
       Question(
         text: 'من هو أول الصحابة إسلاماً من الرجال؟',
@@ -107,9 +107,9 @@ final List<Category> sampleCategories = [
         correctAnswerIndex: 2,
       ),
       Question(
-        text: 'ما هي شجرة "دم الأخوين" الشهيرة وما الجزيرة التي تنمو فيها؟',
-        options: ['ميناء المخا', 'جزيرة سقطرى', 'جبل صبر', 'وادي حضرموت'],
-        correctAnswerIndex: 1,
+        text: 'ما هي الشجرة الشهيرة التي تنمو في جزيرة سقطرى؟',
+        options: ['دم الأخوين', 'شجرة الزيتون', 'الأرز', 'النخيل'],
+        correctAnswerIndex: 0,
       ),
       Question(
         text: 'بماذا يلقب ميناء المخا اليمني تاريخياً في عالم القهوة؟',
@@ -125,7 +125,7 @@ final List<Category> sampleCategories = [
     color: Colors.blueAccent,
     questions: [
       Question(
-        text: 'كم عدد لاعبين فريق كرة القدم داخل الملعب؟',
+        text: 'كم عدد أفراد فريق كرة القدم داخل الملعب؟',
         options: ['10', '11', '12', '9'],
         correctAnswerIndex: 1,
       ),
@@ -218,7 +218,7 @@ class CategorySelectionScreen extends StatelessWidget {
   }
 }
 
-// --- 2. شاشة اللعب والأسئلة ---
+// --- 2. شاشة اللعب والأسئلة مع العداد التنازلي وترتيب الأسئلة عشوائياً بكل جولة ---
 class QuizScreen extends StatefulWidget {
   final Category category;
 
@@ -235,23 +235,60 @@ class _QuizScreenState extends State<QuizScreen> {
   int? _selectedAnswerIndex;
   bool _isAnswered = false;
 
+  Timer? _timer;
+  int _timeLeft = 15; // 15 ثانية لكل سؤال
+
   @override
   void initState() {
     super.initState();
     _startNewRound();
   }
 
-  // تحديث وعمل عشوائية للأسئلة عند كل جولة جديدة
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   void _startNewRound() {
-    _roundQuestions = List.from(widget.category.questions)..shuffle();
+    _roundQuestions = List.from(widget.category.questions)..shuffle(); // خلط الأسئلة عشوائياً لكل جولة
     _currentIndex = 0;
     _score = 0;
+    _resetQuestionState();
+  }
+
+  void _resetQuestionState() {
     _selectedAnswerIndex = null;
     _isAnswered = false;
+    _timeLeft = 15;
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_timeLeft > 0) {
+        setState(() {
+          _timeLeft--;
+        });
+      } else {
+        _timer?.cancel();
+        _timeOutAnswer();
+      }
+    });
+  }
+
+  void _timeOutAnswer() {
+    if (_isAnswered) return;
+    setState(() {
+      _isAnswered = true;
+    });
+    _nextQuestionWithDelay();
   }
 
   void _answerQuestion(int index) {
     if (_isAnswered) return;
+    _timer?.cancel();
 
     setState(() {
       _selectedAnswerIndex = index;
@@ -261,13 +298,16 @@ class _QuizScreenState extends State<QuizScreen> {
       }
     });
 
-    // الانتقال للسؤال التالي بعد ثانية ونصف
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    _nextQuestionWithDelay();
+  }
+
+  void _nextQuestionWithDelay() {
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (!mounted) return;
       if (_currentIndex < _roundQuestions.length - 1) {
         setState(() {
           _currentIndex++;
-          _selectedAnswerIndex = null;
-          _isAnswered = false;
+          _resetQuestionState();
         });
       } else {
         _showResultDialog();
@@ -282,7 +322,7 @@ class _QuizScreenState extends State<QuizScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF0F3460),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('اكتملت الجولة! 🎉', textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
+        title: const Text('انتهت الجولة! 🎉', textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -297,10 +337,10 @@ class _QuizScreenState extends State<QuizScreen> {
             onPressed: () {
               Navigator.pop(context);
               setState(() {
-                _startNewRound(); // إعادة الجولة وترتيب الأسئلة عشوائياً
+                _startNewRound(); // جولة جديدة بترتيب أسئلة عشوائي
               });
             },
-            child: const Text('جولة جديدة (تحديث الأسئلة)', style: TextStyle(color: Colors.greenAccent)),
+            child: const Text('جولة جديدة (خلط الأسئلة)', style: TextStyle(color: Colors.greenAccent)),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
@@ -329,23 +369,39 @@ class _QuizScreenState extends State<QuizScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // شريط التقدم
+            // شريط التقدم والعداد
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('السؤال ${_currentIndex + 1} من ${_roundQuestions.length}',
                     style: const TextStyle(color: Colors.white70, fontSize: 16)),
-                Text('النقاط: $_score',
-                    style: const TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold)),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _timeLeft <= 5 ? Colors.redAccent.withOpacity(0.2) : Colors.amber.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.timer, color: _timeLeft <= 5 ? Colors.redAccent : Colors.amber, size: 20),
+                      const SizedBox(width: 6),
+                      Text('$_timeLeft ثانية',
+                          style: TextStyle(
+                            color: _timeLeft <= 5 ? Colors.redAccent : Colors.amber,
+                            fontWeight: FontWeight.bold,
+                          )),
+                    ],
+                  ),
+                ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             LinearProgressIndicator(
-              value: (_currentIndex + 1) / _roundQuestions.length,
+              value: _timeLeft / 15,
               backgroundColor: Colors.white10,
-              color: widget.category.color,
+              color: _timeLeft <= 5 ? Colors.redAccent : widget.category.color,
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 25),
 
             // كارت السؤال
             Container(
@@ -360,9 +416,9 @@ class _QuizScreenState extends State<QuizScreen> {
                 style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ),
-            const SizedBox(height: 30),
+            const SizedBox(height: 25),
 
-            // قائمة الخيارات
+            // قائمة خيارات الإجابة
             Expanded(
               child: ListView.builder(
                 itemCount: currentQ.options.length,
