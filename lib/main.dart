@@ -30,7 +30,8 @@ class UserProfile {
   String email;
   String password;
   String avatarUrl;
-  bool isAdmin;
+  bool isOwner; // المالك @Lymon
+  String badgeType; // 'gold', 'green', 'blue', 'none'
   bool isBanned;
   bool isTimeout;
 
@@ -39,7 +40,8 @@ class UserProfile {
     required this.email,
     required this.password,
     this.avatarUrl = '',
-    this.isAdmin = false,
+    this.isOwner = false,
+    this.badgeType = 'none',
     this.isBanned = false,
     this.isTimeout = false,
   });
@@ -47,45 +49,50 @@ class UserProfile {
 
 class ChatMessage {
   final String text;
-  final bool isMe;
-  int status; // 1: مرسل، 2: واصل، 3: مقروء
+  final String sender;
+  int status; // 1: مرسل (صح)، 2: واصل (صحين رمادي)، 3: مقروء (صحين أزرق)
 
   ChatMessage({
     required this.text,
-    required this.isMe,
+    required this.sender,
     this.status = 1,
   });
 }
 
-class Ticket {
-  final String id;
-  final String username;
-  final String type;
+class ChatRoom {
+  final String chatId;
+  final String chatName;
   final List<ChatMessage> messages;
+  bool isReadByPeer;
 
-  Ticket({required this.id, required this.username, required this.type, required this.messages});
+  ChatRoom({
+    required this.chatId,
+    required this.chatName,
+    required this.messages,
+    this.isReadByPeer = false,
+  });
 }
 
-// الحساب الإداري الرسمي (موثق بصح خضراء ومخفي عن العامة)
-final UserProfile adminUser = UserProfile(
+// الحساب الإداري المالك (الصح الأصفر)
+final UserProfile ownerUser = UserProfile(
   username: '@Lymon',
   email: 'Mmaymanmm2020@gmail.com',
   password: 'Mmaymanmm2020',
-  isAdmin: true,
+  avatarUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=500', // شعار قريب للمالك
+  isOwner: true,
+  badgeType: 'gold',
 );
 
 List<UserProfile> registeredUsers = [
-  adminUser,
-  UserProfile(username: '@ahmed', email: 'ahmed@app.com', password: '123'),
-  UserProfile(username: '@sara', email: 'sara@app.com', password: '123'),
+  ownerUser,
+  UserProfile(username: '@ahmed', email: 'ahmed@app.com', password: '123', badgeType: 'none'),
+  UserProfile(username: '@sara', email: 'sara@app.com', password: '123', badgeType: 'blue'),
 ];
 
-List<String> publicGroups = ['@General_Public_Chat 🌍', '@Gamers_Hub 🎮'];
-List<Ticket> allTickets = [];
-
+List<ChatRoom> allActiveChats = [];
 UserProfile? currentUser;
 
-// --- 1. شاشة المصادقة وتسجيل الدخول ---
+// --- 1. شاشة تسجيل الدخول ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -115,11 +122,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       if (found != null) {
         if (found.isBanned) {
-          _showMsg('حسابك محظور مؤبداً من الإدارة!');
-          return;
-        }
-        if (found.isTimeout) {
-          _showMsg('حسابك في تايم آوت مؤقت!');
+          _showMsg('حسابك محظور من الإدارة!');
           return;
         }
         currentUser = found;
@@ -129,7 +132,7 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     } else {
       if (!username.startsWith('@')) username = '@$username';
-      var newUser = UserProfile(username: username, email: input, password: password);
+      var newUser = UserProfile(username: username, email: input, password: password, badgeType: 'none');
       registeredUsers.add(newUser);
       currentUser = newUser;
       _navigateToHome();
@@ -150,7 +153,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(isLogin ? 'دخول Lymon Chat' : 'إنشاء حساب'), backgroundColor: const Color(0xFF202C33)),
+      appBar: AppBar(title: Text(isLogin ? 'تسجيل الدخول - Lymon Chat' : 'إنشاء حساب'), backgroundColor: const Color(0xFF202C33)),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Center(
@@ -158,8 +161,13 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.chat_bubble_rounded, size: 70, color: Color(0xFF00A884)),
+                const CircleAvatar(
+                  radius: 45,
+                  backgroundImage: NetworkImage('https://images.unsplash.com/photo-1550547660-d9450f859349?w=500'),
+                ),
                 const SizedBox(height: 20),
+                const Text('Lymon Chat Pro', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 30),
                 if (!isLogin) ...[
                   TextField(
                     controller: _usernameController,
@@ -205,7 +213,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<String> myChats = ['@Lymai (الذكاء الاصطناعي 🤖)', 'تذاكر الدعم الفني 🎫'];
+  final List<String> myChats = ['@Lymai (الذكاء الاصطناعي 🤖)'];
 
   void _searchAndAdd() {
     final controller = TextEditingController();
@@ -213,77 +221,62 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF202C33),
-        title: const Text('البحث (شخص أو جروب عام)'),
-        content: TextField(controller: controller, decoration: const InputDecoration(hintText: '@user أو اسم الجروب')),
+        title: const Text('إضافة شخص باليوزر (@)'),
+        content: TextField(controller: controller, decoration: const InputDecoration(hintText: '@user')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A884)),
             onPressed: () {
               String q = controller.text.trim();
+              if (!q.startsWith('@')) q = '@$q';
               Navigator.pop(context);
-              if (publicGroups.contains(q) || registeredUsers.any((u) => u.username.toLowerCase() == q.toLowerCase())) {
+
+              bool exists = registeredUsers.any((u) => u.username.toLowerCase() == q.toLowerCase());
+              if (exists) {
                 setState(() {
                   if (!myChats.contains(q)) myChats.add(q);
                 });
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تم الانضمام/الإضافة: $q')));
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('تمت الإضافة: $q')));
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('المستخدم أو الجروب غير موجود!')));
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: const Color(0xFF202C33),
+                    title: const Text('خطأ'),
+                    content: const Text('المستخدم غير موجود في النظام!'),
+                    actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('حسناً'))],
+                  ),
+                );
               }
             },
-            child: const Text('بحث'),
+            child: const Text('بحث وإضافة'),
           ),
         ],
       ),
     );
   }
 
-  void _createPublicGroup() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF202C33),
-        title: const Text('إنشاء جروب عام 🌍'),
-        content: TextField(controller: controller, decoration: const InputDecoration(hintText: 'اسم الجروب مع @')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A884)),
-            onPressed: () {
-              String name = controller.text.trim();
-              if (name.isNotEmpty) {
-                if (!name.startsWith('@')) name = '@$name';
-                publicGroups.add(name);
-                setState(() => myChats.add(name));
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('إنشاء'),
-          ),
-        ],
-      ),
-    );
+  Widget _getBadgeIcon(String badge) {
+    if (badge == 'gold') return const Icon(Icons.verified, color: Colors.amber, size: 18);
+    if (badge == 'green') return const Icon(Icons.verified, color: Colors.green, size: 18);
+    if (badge == 'blue') return const Icon(Icons.verified, color: Colors.blueAccent, size: 18);
+    return const SizedBox.shrink();
   }
 
   @override
   Widget build(BuildContext context) {
-    bool isAdmin = currentUser?.isAdmin ?? false;
-
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
             Text('Lymon Chat (${currentUser?.username})'),
-            if (isAdmin) ...[
-              const SizedBox(width: 4),
-              const Icon(Icons.verified, color: Colors.green, size: 20),
-            ]
+            const SizedBox(width: 4),
+            _getBadgeIcon(currentUser?.badgeType ?? 'none'),
           ],
         ),
         backgroundColor: const Color(0xFF202C33),
         actions: [
-          IconButton(icon: const Icon(Icons.public), onPressed: _createPublicGroup),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) => setState(() {})),
@@ -295,26 +288,28 @@ class _HomeScreenState extends State<HomeScreen> {
         itemBuilder: (context, index) {
           String chat = myChats[index];
           bool isAI = chat.contains('Lymai');
-          bool isTicketHub = chat.contains('تذاكر');
+          UserProfile? peer = registeredUsers.firstWhere(
+            (u) => u.username == chat,
+            orElse: () => UserProfile(username: '', email: '', password: ''),
+          );
 
           return ListTile(
             leading: CircleAvatar(
-              backgroundColor: isAI ? Colors.indigo : (isTicketHub ? Colors.orange : const Color(0xFF00A884)),
-              child: Icon(isAI ? Icons.smart_toy : (isTicketHub ? Icons.confirmation_number : Icons.group), color: Colors.white),
+              backgroundColor: isAI ? Colors.indigo : const Color(0xFF00A884),
+              backgroundImage: peer.avatarUrl.isNotEmpty ? NetworkImage(peer.avatarUrl) : null,
+              child: peer.avatarUrl.isEmpty && !isAI ? const Icon(Icons.person) : null,
             ),
             title: Row(
               children: [
                 Text(chat, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                if (chat == '@Lymon') const Icon(Icons.verified, color: Colors.green, size: 16),
+                const SizedBox(width: 4),
+                if (!isAI) _getBadgeIcon(peer.badgeType),
               ],
             ),
             subtitle: const Text('انقر لفتح الدردشة...', style: TextStyle(color: Colors.grey)),
             onTap: () {
-              if (isTicketHub) {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => const TicketsScreen()));
-              } else {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatName: chat, isAI: isAI)));
-              }
+              Navigator.push(context, MaterialPageRoute(builder: (_) => ChatScreen(chatName: chat, isAI: isAI)))
+                  .then((_) => setState(() {}));
             },
           );
         },
@@ -322,13 +317,13 @@ class _HomeScreenState extends State<HomeScreen> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF00A884),
         onPressed: _searchAndAdd,
-        child: const Icon(Icons.search, color: Colors.white),
+        child: const Icon(Icons.person_add, color: Colors.white),
       ),
     );
   }
 }
 
-// --- 3. إعدادات الحساب ---
+// --- 3. إعدادات الحساب وزر تسجيل الخروج ---
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -355,22 +350,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.pop(context);
   }
 
+  void _logout() {
+    currentUser = null;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const AuthScreen()),
+      (route) => false,
+    );
+  }
+
+  // لوحة تحكم المالك لإعطاء الصح الأخضر أو الأزرق
+  void _openOwnerBadgePanel() {
+    showDialog(
+      context: context,
+      builder: (context) {
+        String targetUser = '';
+        return AlertDialog(
+          backgroundColor: const Color(0xFF202C33),
+          title: const Text('لوحة المالك: توزيع التوثيق 🌟'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                onChanged: (v) => targetUser = v,
+                decoration: const InputDecoration(hintText: 'يوزر المستخدم مثل @ahmed'),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    onPressed: () {
+                      for (var u in registeredUsers) {
+                        if (u.username.toLowerCase() == targetUser.trim().toLowerCase()) {
+                          u.badgeType = 'green';
+                        }
+                      }
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إعطاء الصح الأخضر!')));
+                    },
+                    child: const Text('صح أخضر 🟢'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                    onPressed: () {
+                      for (var u in registeredUsers) {
+                        if (u.username.toLowerCase() == targetUser.trim().toLowerCase()) {
+                          u.badgeType = 'blue';
+                        }
+                      }
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إعطاء الصح الأزرق!')));
+                    },
+                    child: const Text('صح أزرق 🔵'),
+                  ),
+                ],
+              )
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    bool isOwner = currentUser?.isOwner ?? false;
+
     return Scaffold(
       appBar: AppBar(title: const Text('إعدادات الحساب'), backgroundColor: const Color(0xFF202C33)),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'تغيير اسم المستخدم')),
+            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'تغيير الاسم')),
             const SizedBox(height: 16),
-            TextField(controller: _avatarController, decoration: const InputDecoration(labelText: 'رابط الصورة الشخصية (Avatar URL)')),
+            TextField(controller: _avatarController, decoration: const InputDecoration(labelText: 'رابط الصورة الشخصية')),
             const SizedBox(height: 24),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A884), minimumSize: const Size.fromHeight(50)),
               onPressed: _save,
               child: const Text('حفظ التعديلات'),
+            ),
+            const SizedBox(height: 12),
+            if (isOwner)
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.amber.shade800, minimumSize: const Size.fromHeight(50)),
+                onPressed: _openOwnerBadgePanel,
+                child: const Text('لوحة المالك (منح الصح الأخضر والأزرق) 👑', style: TextStyle(color: Colors.white)),
+              ),
+            const Spacer(),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800, minimumSize: const Size.fromHeight(50)),
+              onPressed: _logout,
+              icon: const Icon(Icons.logout),
+              label: const Text('تسجيل الخروج'),
             ),
           ],
         ),
@@ -379,138 +454,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// --- 4. نظام التذاكر (شكاوى واقتراحات) ---
-class TicketsScreen extends StatefulWidget {
-  const TicketsScreen({super.key});
-
-  @override
-  State<TicketsScreen> createState() => _TicketsScreenState();
-}
-
-class _TicketsScreenState extends State<TicketsScreen> {
-  void _openNewTicket(String type) {
-    String tid = 'تذكرة #${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}';
-    Ticket newT = Ticket(id: tid, username: currentUser!.username, type: type, messages: [
-      ChatMessage(text: 'تم فتح التذكرة بنجاح من نوع: $type. سيتم الرد قريباً من الإدارة.', isMe: false)
-    ]);
-    setState(() {
-      allTickets.add(newT);
-    });
-    Navigator.push(context, MaterialPageRoute(builder: (_) => TicketChatScreen(ticket: newT)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    bool isAdmin = currentUser?.isAdmin ?? false;
-    List<Ticket> visibleTickets = isAdmin 
-        ? allTickets 
-        : allTickets.where((t) => t.username == currentUser?.username).toList();
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('نظام التذاكر (اقتراح وشكوى)'), backgroundColor: const Color(0xFF202C33)),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue),
-                  onPressed: () => _openNewTicket('اقتراح 💡'),
-                  icon: const Icon(Icons.lightbulb),
-                  label: const Text('فتح اقتراح'),
-                ),
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                  onPressed: () => _openNewTicket('شكوى ⚠️'),
-                  icon: const Icon(Icons.report),
-                  label: const Text('فتح شكوى'),
-                ),
-              ],
-            ),
-          ),
-          const Divider(color: Colors.grey),
-          Expanded(
-            child: ListView.builder(
-              itemCount: visibleTickets.length,
-              itemBuilder: (context, index) {
-                Ticket t = visibleTickets[index];
-                return ListTile(
-                  leading: const Icon(Icons.confirmation_number, color: Colors.amber),
-                  title: Text(t.id, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('النوع: ${t.type} | صاحبها: ${t.username}'),
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => TicketChatScreen(ticket: t))),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class TicketChatScreen extends StatefulWidget {
-  final Ticket ticket;
-  const TicketChatScreen({super.key, required this.ticket});
-
-  @override
-  State<TicketChatScreen> createState() => _TicketChatScreenState();
-}
-
-class _TicketChatScreenState extends State<TicketChatScreen> {
-  final _ctrl = TextEditingController();
-
-  void _send() {
-    if (_ctrl.text.isEmpty) return;
-    setState(() {
-      widget.ticket.messages.add(ChatMessage(text: _ctrl.text, isMe: true));
-      _ctrl.clear();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.ticket.id), backgroundColor: const Color(0xFF202C33)),
-      body: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: widget.ticket.messages.length,
-              itemBuilder: (context, index) {
-                var m = widget.ticket.messages[index];
-                return Align(
-                  alignment: m.isMe ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: m.isMe ? const Color(0xFF005C4B) : const Color(0xFF202C33), borderRadius: BorderRadius.circular(8)),
-                    child: Text(m.text, style: const TextStyle(color: Colors.white)),
-                  ),
-                );
-              },
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(8),
-            color: const Color(0xFF202C33),
-            child: Row(
-              children: [
-                Expanded(child: TextField(controller: _ctrl, decoration: const InputDecoration(hintText: 'اكتب ردك للتذكرة...'))),
-                IconButton(icon: const Icon(Icons.send, color: Color(0xFF00A884)), onPressed: _send),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// --- 5. شاشة الدردشة والتفاعل الذكي مع Lymai وصلاحيات الإدارة ---
+// --- 4. شاشة الدردشة الحقيقية (الصحين لا يصبحان أزرق إلا عند فتحها) ---
 class ChatScreen extends StatefulWidget {
   final String chatName;
   final bool isAI;
@@ -522,34 +466,51 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final List<ChatMessage> messages = [];
+  late ChatRoom room;
   final _msgController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    messages.add(ChatMessage(text: 'أهلاً بك في محادثة ${widget.chatName}', isMe: false, status: 3));
+    // البحث عن غرفة محادثة سابقة أو إنشاء واحدة جديدة
+    String rid = '${currentUser?.username}_${widget.chatName}';
+    var found = allActiveChats.where((c) => c.chatId == rid);
+    if (found.isNotEmpty) {
+      room = found.first;
+    } else {
+      room = ChatRoom(chatId: rid, chatName: widget.chatName, messages: [
+        ChatMessage(text: 'أهلاً بك في الدردشة مع ${widget.chatName}', sender: 'system', status: 3)
+      ]);
+      allActiveChats.add(room);
+    }
+
+    // بمجرد أن يفتح المستخدم الدردشة، تتحول جميع رسائل الطرف الآخر إلى "مقروءة" (صحين أزرق) حقيقياً
+    for (var m in room.messages) {
+      if (m.sender != currentUser?.username && m.sender != 'system') {
+        m.status = 3;
+      }
+    }
   }
 
-  void _sendMessage({required String text}) {
-    if (text.trim().isEmpty) return;
+  void _sendMessage() {
+    String text = _msgController.text.trim();
+    if (text.isEmpty) return;
 
     setState(() {
-      messages.add(ChatMessage(text: text, isMe: true, status: 1));
+      // حالة الرسالة تبدأ بـ 1 (صح أُرسلت)، وعند تسليمها تصبح 2 (صحين رمادي لأن الشخص قد لا يكون فاتحاً الآن)
+      var msg = ChatMessage(text: text, sender: currentUser!.username, status: 2);
+      room.messages.add(msg);
+      _msgController.clear();
     });
-    _msgController.clear();
 
-    Future.delayed(const Duration(milliseconds: 600), () => setState(() => messages.last.status = 2));
-    Future.delayed(const Duration(milliseconds: 1200), () => setState(() => messages.last.status = 3));
-
-    // رد الذكاء الاصطناعي Lymai
+    // رد الذكاء الاصطناعي Lymai فوراً
     if (widget.isAI) {
-      Future.delayed(const Duration(milliseconds: 1600), () {
+      Future.delayed(const Duration(milliseconds: 1000), () {
         if (mounted) {
           setState(() {
-            messages.add(ChatMessage(
-              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. لقد فهمت رسالتك حول "$text" وأنا هنا للإجابة ومساعدتك دائماً!',
-              isMe: false,
+            room.messages.add(ChatMessage(
+              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. استلمت رسالتك وأنا هنا لخدمتك.',
+              sender: 'Lymai',
               status: 3,
             ));
           });
@@ -558,75 +519,27 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _showAdminPanel() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF202C33),
-        title: const Text('لوحة تحكم الإدارة 🛡️'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إعطاء تايم آوت للمستخدم')));
-              },
-              child: const Text('إعطاء تايم آوت مؤقت ⏱️'),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حظر المستخدم مؤبداً ⛔')));
-              },
-              child: const Text('حظر مؤبد ⛔'),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم فك الحظر عن المستخدم ✅')));
-              },
-              child: const Text('فك الحظر عنه ✅'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    bool isAdmin = currentUser?.isAdmin ?? false;
-
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.chatName),
-        backgroundColor: const Color(0xFF202C33),
-        actions: [
-          if (isAdmin)
-            IconButton(icon: const Icon(Icons.admin_panel_settings, color: Colors.green), onPressed: _showAdminPanel),
-        ],
-      ),
+      appBar: AppBar(title: Text(widget.chatName), backgroundColor: const Color(0xFF202C33)),
       body: Column(
         children: [
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: messages.length,
+              itemCount: room.messages.length,
               itemBuilder: (context, index) {
-                var m = messages[index];
+                var m = room.messages[index];
+                bool isMe = m.sender == currentUser?.username;
+
                 return Align(
-                  alignment: m.isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: m.isMe ? const Color(0xFF005C4B) : const Color(0xFF202C33),
+                      color: isMe ? const Color(0xFF005C4B) : const Color(0xFF202C33),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -634,10 +547,18 @@ class _ChatScreenState extends State<ChatScreen> {
                       children: [
                         Text(m.text, style: const TextStyle(color: Colors.white, fontSize: 16)),
                         const SizedBox(height: 4),
-                        if (m.isMe)
+                        if (isMe)
                           Text(
-                            m.status == 1 ? '✓' : (m.status == 2 ? '✓✓' : '✓✓'),
-                            style: TextStyle(color: m.status == 3 ? Colors.blueAccent : Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+                            m.status == 1
+                                ? '✓'
+                                : m.status == 2
+                                    ? '✓✓'
+                                    : '✓✓',
+                            style: TextStyle(
+                              color: m.status == 3 ? Colors.blueAccent : Colors.grey,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           )
                       ],
                     ),
@@ -666,7 +587,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(width: 8),
                 IconButton(
                   icon: const Icon(Icons.send, color: Color(0xFF00A884)),
-                  onPressed: () => _sendMessage(text: _msgController.text),
+                  onPressed: _sendMessage,
                 ),
               ],
             ),
