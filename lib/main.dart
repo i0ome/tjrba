@@ -30,10 +30,12 @@ class UserProfile {
   String email;
   String password;
   String avatarUrl;
-  bool isOwner; // المالك @Lymon
+  bool isOwner;
   String badgeType; // 'gold', 'green', 'blue', 'none'
+  List<String> following; // من يتابعم
+  List<String> followers; // من يتابعونه
+  List<ChatMessage> offlineInbox; // الرسائل الواردة أثناء خروج المستخدم
   bool isBanned;
-  bool isTimeout;
 
   UserProfile({
     required this.username,
@@ -42,15 +44,19 @@ class UserProfile {
     this.avatarUrl = '',
     this.isOwner = false,
     this.badgeType = 'none',
+    List<String>? following,
+    List<String>? followers,
+    List<ChatMessage>? offlineInbox,
     this.isBanned = false,
-    this.isTimeout = false,
-  });
+  })  : following = following ?? [],
+        followers = followers ?? [],
+        offlineInbox = offlineInbox ?? [];
 }
 
 class ChatMessage {
   final String text;
   final String sender;
-  int status; // 1: مرسل (صح)، 2: واصل (صحين رمادي)، 3: مقروء (صحين أزرق)
+  int status; // 1: مرسل، 2: واصل، 3: مقروء
 
   ChatMessage({
     required this.text,
@@ -63,22 +69,20 @@ class ChatRoom {
   final String chatId;
   final String chatName;
   final List<ChatMessage> messages;
-  bool isReadByPeer;
 
   ChatRoom({
     required this.chatId,
     required this.chatName,
     required this.messages,
-    this.isReadByPeer = false,
   });
 }
 
-// الحساب الإداري المالك (الصح الأصفر)
+// حساب المالك الرسمي (الصح الأصفر وصورة الشعار)[span_3](start_span)[span_3](end_span)
 final UserProfile ownerUser = UserProfile(
   username: '@Lymon',
   email: 'Mmaymanmm2020@gmail.com',
   password: 'Mmaymanmm2020',
-  avatarUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=500', // شعار قريب للمالك
+  avatarUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=500', 
   isOwner: true,
   badgeType: 'gold',
 );
@@ -126,6 +130,7 @@ class _AuthScreenState extends State<AuthScreen> {
           return;
         }
         currentUser = found;
+        _checkOfflineMessages(); // سحب الرسائل الواردة أثناء غيابه
         _navigateToHome();
       } else {
         _showMsg('البريد أو الرمز غير صحيح');
@@ -137,6 +142,24 @@ class _AuthScreenState extends State<AuthScreen> {
       currentUser = newUser;
       _navigateToHome();
     }
+  }
+
+  // نقل الرسائل المعلقة في الـ Offline Inbox إلى غرف الدردشة النشطة عند الدخول
+  void _checkOfflineMessages() {
+    if (currentUser == null || currentUser!.offlineInbox.isEmpty) return;
+    for (var msg in currentUser!.offlineInbox) {
+      String rid = '${msg.sender}_${currentUser!.username}';
+      var room = allActiveChats.firstWhere(
+        (c) => c.chatId == rid || c.chatId == '${currentUser!.username}_${msg.sender}',
+        orElse: () {
+          var r = ChatRoom(chatId: rid, chatName: msg.sender, messages: []);
+          allActiveChats.add(r);
+          return r;
+        },
+      );
+      room.messages.add(msg);
+    }
+    currentUser!.offlineInbox.clear();
   }
 
   void _showMsg(String msg) {
@@ -193,7 +216,7 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 TextButton(
                   onPressed: () => setState(() => isLogin = !isLogin),
-                  child: Text(isLogin ? 'إنشاء حساب جديد' : 'لديك حساب؟ سجل دخولك'),
+                  child: Text(isLogin ? 'ليس لديك حساب؟ إنشاء حساب' : 'لديك حساب؟ سجل دخولك'),
                 ),
               ],
             ),
@@ -301,7 +324,15 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             title: Row(
               children: [
-                Text(chat, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                GestureDetector(
+                  onTap: () {
+                    if (!isAI) {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => UserProfileScreen(user: peer)))
+                          .then((_) => setState(() {}));
+                    }
+                  },
+                  child: Text(chat, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                ),
                 const SizedBox(width: 4),
                 if (!isAI) _getBadgeIcon(peer.badgeType),
               ],
@@ -323,7 +354,91 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- 3. إعدادات الحساب وزر تسجيل الخروج ---
+// --- 3. شاشة ملف الشخص (عرض الفولو، كم ضايف، وكم ضايفه، وسحب التوثيق) ---
+class UserProfileScreen extends StatefulWidget {
+  final UserProfile user;
+  const UserProfileScreen({super.key, required this.user});
+
+  @override
+  State<UserProfileScreen> createState() => _UserProfileScreenState();
+}
+
+class _UserProfileScreenState extends State<UserProfileScreen> {
+  @override
+  Widget build(BuildContext context) {
+    bool isFollowing = currentUser!.following.contains(widget.user.username);
+    bool isOwner = currentUser!.isOwner;
+
+    return Scaffold(
+      appBar: AppBar(title: Text('ملف ${widget.user.username}'), backgroundColor: const Color(0xFF202C33)),
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          children: [
+            CircleAvatar(
+              radius: 50,
+              backgroundImage: widget.user.avatarUrl.isNotEmpty ? NetworkImage(widget.user.avatarUrl) : null,
+              child: widget.user.avatarUrl.isEmpty ? const Icon(Icons.person, size: 50) : null,
+            ),
+            const SizedBox(height: 16),
+            Text(widget.user.username, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                Column(
+                  children: [
+                    Text('${widget.user.followers.length}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber)),
+                    const Text('المتابعون (الضايفين)', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+                Column(
+                  children: [
+                    Text('${widget.user.following.length}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.amber)),
+                    const Text('يتابع (ضايف)', style: TextStyle(color: Colors.grey)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isFollowing ? Colors.grey.shade700 : const Color(0xFF00A884),
+                minimumSize: const Size.fromHeight(45),
+              ),
+              onPressed: () {
+                setState(() {
+                  if (isFollowing) {
+                    currentUser!.following.remove(widget.user.username);
+                    widget.user.followers.remove(currentUser!.username);
+                  } else {
+                    currentUser!.following.add(widget.user.username);
+                    widget.user.followers.add(currentUser!.username);
+                  }
+                });
+              },
+              child: Text(isFollowing ? 'إلغاء المتابعة' : 'فولو (متابعة)'),
+            ),
+            const SizedBox(height: 16),
+            if (isOwner && widget.user.badgeType != 'none' && widget.user.badgeType != 'gold')
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800, minimumSize: const Size.fromHeight(45)),
+                onPressed: () {
+                  setState(() {
+                    widget.user.badgeType = 'none';
+                  });
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم سحب التوثيق بنجاح!')));
+                },
+                child: const Text('سحب التوثيق ⛔'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// --- 4. إعدادات الحساب وزر تسجيل الخروج ---
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -359,7 +474,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // لوحة تحكم المالك لإعطاء الصح الأخضر أو الأزرق
   void _openOwnerBadgePanel() {
     showDialog(
       context: context,
@@ -388,7 +502,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                       }
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إعطاء الصح الأخضر!')));
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم منح الصح الأخضر!')));
                     },
                     child: const Text('صح أخضر 🟢'),
                   ),
@@ -401,7 +515,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         }
                       }
                       Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم إعطاء الصح الأزرق!')));
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم منح الصح الأزرق!')));
                     },
                     child: const Text('صح أزرق 🔵'),
                   ),
@@ -454,7 +568,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// --- 4. شاشة الدردشة الحقيقية (الصحين لا يصبحان أزرق إلا عند فتحها) ---
+// --- 5. شاشة الدردشة والتخزين المؤقت للرسائل غير المتصلة ---
 class ChatScreen extends StatefulWidget {
   final String chatName;
   final bool isAI;
@@ -472,9 +586,8 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    // البحث عن غرفة محادثة سابقة أو إنشاء واحدة جديدة
     String rid = '${currentUser?.username}_${widget.chatName}';
-    var found = allActiveChats.where((c) => c.chatId == rid);
+    var found = allActiveChats.where((c) => c.chatId == rid || c.chatId == '${widget.chatName}_${currentUser?.username}');
     if (found.isNotEmpty) {
       room = found.first;
     } else {
@@ -484,7 +597,7 @@ class _ChatScreenState extends State<ChatScreen> {
       allActiveChats.add(room);
     }
 
-    // بمجرد أن يفتح المستخدم الدردشة، تتحول جميع رسائل الطرف الآخر إلى "مقروءة" (صحين أزرق) حقيقياً
+    // تحديث حالة الرسائل الواردة إلى مقروءة (صحين أزرق) عند فتح الشات
     for (var m in room.messages) {
       if (m.sender != currentUser?.username && m.sender != 'system') {
         m.status = 3;
@@ -497,19 +610,27 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
 
     setState(() {
-      // حالة الرسالة تبدأ بـ 1 (صح أُرسلت)، وعند تسليمها تصبح 2 (صحين رمادي لأن الشخص قد لا يكون فاتحاً الآن)
       var msg = ChatMessage(text: text, sender: currentUser!.username, status: 2);
       room.messages.add(msg);
       _msgController.clear();
+
+      // إذا كان المستقبل مستخدماً آخر وليس AI، نفترض وصول الرسالة أو حفظها في بريده المؤقت لو كان خارج الحساب
+      if (!widget.isAI) {
+        UserProfile? peer = registeredUsers.firstWhere(
+          (u) => u.username == widget.chatName,
+          orElse: () => UserProfile(username: '', email: '', password: ''),
+        );
+        // إذا لم يكن الشخص متصلاً الآن في هذا الشات (محاكاة خروج الشخص)، تُحفظ في offlineInbox الخاص به
+        peer.offlineInbox.add(ChatMessage(text: text, sender: currentUser!.username, status: 2));
+      }
     });
 
-    // رد الذكاء الاصطناعي Lymai فوراً
     if (widget.isAI) {
       Future.delayed(const Duration(milliseconds: 1000), () {
         if (mounted) {
           setState(() {
             room.messages.add(ChatMessage(
-              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. استلمت رسالتك وأنا هنا لخدمتك.',
+              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. استلمت رسالتك.',
               sender: 'Lymai',
               status: 3,
             ));
@@ -549,11 +670,7 @@ class _ChatScreenState extends State<ChatScreen> {
                         const SizedBox(height: 4),
                         if (isMe)
                           Text(
-                            m.status == 1
-                                ? '✓'
-                                : m.status == 2
-                                    ? '✓✓'
-                                    : '✓✓',
+                            m.status == 1 ? '✓' : '✓✓',
                             style: TextStyle(
                               color: m.status == 3 ? Colors.blueAccent : Colors.grey,
                               fontSize: 12,
