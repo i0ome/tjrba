@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
 
 void main() {
@@ -49,13 +48,11 @@ class UserProfile {
 class ChatMessage {
   final String text;
   final bool isMe;
-  final bool isVoice;
   int status; // 1: مرسل، 2: واصل، 3: مقروء
 
   ChatMessage({
     required this.text,
     required this.isMe,
-    this.isVoice = false,
     this.status = 1,
   });
 }
@@ -382,7 +379,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// --- 4. نظام التذاكر (شكاوى واقتراحات - تظهر للادارة وصاحب التذكرة فقط) ---
+// --- 4. نظام التذاكر (شكاوى واقتراحات) ---
 class TicketsScreen extends StatefulWidget {
   const TicketsScreen({super.key});
 
@@ -513,7 +510,7 @@ class _TicketChatScreenState extends State<TicketChatScreen> {
   }
 }
 
-// --- 5. شاشة الدردشة والفويس الحقيقي الفوري والذكاء الاصطناعي Lymai ---
+// --- 5. شاشة الدردشة والتفاعل الذكي مع Lymai وصلاحيات الإدارة ---
 class ChatScreen extends StatefulWidget {
   final String chatName;
   final bool isAI;
@@ -527,8 +524,6 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final List<ChatMessage> messages = [];
   final _msgController = TextEditingController();
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  bool isRecordingVoice = false;
 
   @override
   void initState() {
@@ -536,30 +531,24 @@ class _ChatScreenState extends State<ChatScreen> {
     messages.add(ChatMessage(text: 'أهلاً بك في محادثة ${widget.chatName}', isMe: false, status: 3));
   }
 
-  void _sendMessage({String? text, bool isVoice = false}) {
-    String content = text ?? (isVoice ? '🎤 [تم تسجيل وإرسال رسالة صوتية حقيقية]' : '');
-    if (content.isEmpty) return;
+  void _sendMessage({required String text}) {
+    if (text.trim().isEmpty) return;
 
     setState(() {
-      messages.add(ChatMessage(text: content, isMe: true, isVoice: isVoice, status: 1));
+      messages.add(ChatMessage(text: text, isMe: true, status: 1));
     });
     _msgController.clear();
 
     Future.delayed(const Duration(milliseconds: 600), () => setState(() => messages.last.status = 2));
     Future.delayed(const Duration(milliseconds: 1200), () => setState(() => messages.last.status = 3));
 
-    // محاكاة تشغيل الصوت الحقيقي عند الاستلام
-    if (isVoice) {
-      _audioPlayer.play(AssetSource('default_voice.mp3')).catchError((_) {});
-    }
-
-    // تفاعل الذكاء الاصطناعي Lymai
-    if (widget.isAI && !isVoice) {
+    // رد الذكاء الاصطناعي Lymai
+    if (widget.isAI) {
       Future.delayed(const Duration(milliseconds: 1600), () {
         if (mounted) {
           setState(() {
             messages.add(ChatMessage(
-              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. لقد فهمت رسالتك حول "$content" وأنا هنا للإجابة ومساعدتك دائماً!',
+              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. لقد فهمت رسالتك حول "$text" وأنا هنا للإجابة ومساعدتك دائماً!',
               isMe: false,
               status: 3,
             ));
@@ -567,16 +556,6 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       });
     }
-  }
-
-  void _simulateVoiceRecording() {
-    setState(() => isRecordingVoice = true);
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        setState(() => isRecordingVoice = false);
-        _sendMessage(isVoice: true);
-      }
-    });
   }
 
   void _showAdminPanel() {
@@ -653,18 +632,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        m.isVoice
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.play_arrow, color: Colors.white),
-                                    onPressed: () => _audioPlayer.play(AssetSource('voice.mp3')).catchError((_){}),
-                                  ),
-                                  const Text('🔊 رسالة صوتية حقيقية', style: TextStyle(color: Colors.white)),
-                                ],
-                              )
-                            : Text(m.text, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                        Text(m.text, style: const TextStyle(color: Colors.white, fontSize: 16)),
                         const SizedBox(height: 4),
                         if (m.isMe)
                           Text(
@@ -678,19 +646,6 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
-          if (isRecordingVoice)
-            Container(
-              padding: const EdgeInsets.all(8),
-              color: Colors.red.withOpacity(0.3),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.mic, color: Colors.red, size: 24),
-                  SizedBox(width: 8),
-                  Text('جاري تسجيل الصوت الحقيقي...', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                ],
-              ),
-            ),
           Container(
             padding: const EdgeInsets.all(8),
             color: const Color(0xFF202C33),
@@ -709,17 +664,6 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                GestureDetector(
-                  onLongPressStart: (_) => _simulateVoiceRecording(),
-                  child: CircleAvatar(
-                    backgroundColor: isRecordingVoice ? Colors.red : const Color(0xFF00A884),
-                    child: IconButton(
-                      icon: const Icon(Icons.mic, color: Colors.white),
-                      onPressed: _simulateVoiceRecording,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.send, color: Color(0xFF00A884)),
                   onPressed: () => _sendMessage(text: _msgController.text),
