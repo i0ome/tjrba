@@ -2,453 +2,216 @@ import 'package:flutter/material.dart';
 import 'dart:async';
 
 void main() {
-  runApp(const TriviaGameApp());
+  runApp(const BalootMatchmakingApp());
 }
 
-class TriviaGameApp extends StatelessWidget {
-  const TriviaGameApp({super.key});
+class BalootMatchmakingApp extends StatelessWidget {
+  const BalootMatchmakingApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'تحدي المسابقات',
+      title: 'بلوت أونلاين ذكية',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         fontFamily: 'Roboto',
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF1A1A2E),
+        scaffoldBackgroundColor: const Color(0xFF0D1B2A),
       ),
-      home: const CategorySelectionScreen(),
+      home: const MatchmakingScreen(),
     );
   }
 }
 
-// --- نماذج البيانات (Data Models) ---
-class Question {
-  final String text;
-  final List<String> options;
-  final int correctAnswerIndex;
-
-  Question({
-    required this.text,
-    required this.options,
-    required this.correctAnswerIndex,
-  });
-}
-
-class Category {
-  final String id;
-  final String title;
-  final IconData icon;
-  final Color color;
-  final List<Question> questions;
-
-  Category({
-    required this.id,
-    required this.title,
-    required this.icon,
-    required this.color,
-    required this.questions,
-  });
-}
-
-// --- قاعدة البيانات المدمجة لجميع الفئات ---
-final List<Category> sampleCategories = [
-  Category(
-    id: 'quran',
-    title: 'القرآن الكريم',
-    icon: Icons.menu_book_rounded,
-    color: Colors.green,
-    questions: [
-      Question(
-        text: 'ما هي أطول سورة في القرآن الكريم؟',
-        options: ['سورة النساء', 'سورة البقرة', 'سورة آل عمران', 'سورة المائدة'],
-        correctAnswerIndex: 1,
-      ),
-      Question(
-        text: 'ما هي السورة التي تسمى "عروس القرآن"؟',
-        options: ['سورة يس', 'سورة الرحمن', 'سورة الملك', 'سورة الواقعة'],
-        correctAnswerIndex: 1,
-      ),
-      Question(
-        text: 'كم عدد سور القرآن الكريم؟',
-        options: ['112', '114', '110', '116'],
-        correctAnswerIndex: 1,
-      ),
-    ],
-  ),
-  Category(
-    id: 'islamic',
-    title: 'أسئلة دينية',
-    icon: Icons.mosque_rounded,
-    color: Colors.amber,
-    questions: [
-      Question(
-        text: 'من هو أول الصحابة إسلاماً من الرجال؟',
-        options: ['عمر بن الخطاب', 'علي بن أبي طالب', 'أبو بكر الصديق', 'عثمان بن عفان'],
-        correctAnswerIndex: 2,
-      ),
-      Question(
-        text: 'كم عدد أركان الإسلام؟',
-        options: ['4', '5', '6', '7'],
-        correctAnswerIndex: 1,
-      ),
-    ],
-  ),
-  Category(
-    id: 'yemen',
-    title: 'عن اليمن',
-    icon: Icons.landscape_rounded,
-    color: Colors.redAccent,
-    questions: [
-      Question(
-        text: 'ما هي عاصمة اليمن التاريخية والمشهورة بباب اليمن؟',
-        options: ['عدن', 'تعز', 'صنعاء', 'المكلا'],
-        correctAnswerIndex: 2,
-      ),
-      Question(
-        text: 'ما هي الشجرة الشهيرة التي تنمو في جزيرة سقطرى؟',
-        options: ['دم الأخوين', 'شجرة الزيتون', 'الأرز', 'النخيل'],
-        correctAnswerIndex: 0,
-      ),
-      Question(
-        text: 'بماذا يلقب ميناء المخا اليمني تاريخياً في عالم القهوة؟',
-        options: ['Mocha', 'Arabica', 'Espresso', 'Latte'],
-        correctAnswerIndex: 0,
-      ),
-    ],
-  ),
-  Category(
-    id: 'sports',
-    title: 'الرياضة',
-    icon: Icons.sports_soccer_rounded,
-    color: Colors.blueAccent,
-    questions: [
-      Question(
-        text: 'كم عدد أفراد فريق كرة القدم داخل الملعب؟',
-        options: ['10', '11', '12', '9'],
-        correctAnswerIndex: 1,
-      ),
-      Question(
-        text: 'كم مدة شوط المباراة الرسمي في كرة القدم؟',
-        options: ['40 دقيقة', '45 دقيقة', '50 دقيقة', '60 دقيقة'],
-        correctAnswerIndex: 1,
-      ),
-    ],
-  ),
-];
-
-// --- 1. شاشة اختيار الفئة ---
-class CategorySelectionScreen extends StatelessWidget {
-  const CategorySelectionScreen({super.key});
+// --- 1. شاشة البحث عن لاعبين (Matchmaking) ---
+class MatchmakingScreen extends StatefulWidget {
+  const MatchmakingScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('تحدي المسابقات الجماعية', style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
-        backgroundColor: const Color(0xFF16213E),
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'اختر الفئة لبدء الجولة:',
-              textAlign: TextAlign.right,
-              style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.1,
-                ),
-                itemCount: sampleCategories.length,
-                itemBuilder: (context, index) {
-                  final category = sampleCategories[index];
-                  return Card(
-                    color: const Color(0xFF0F3460),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(16),
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => QuizScreen(category: category),
-                          ),
-                        );
-                      },
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 28,
-                            backgroundColor: category.color.withOpacity(0.2),
-                            child: Icon(category.icon, size: 32, color: category.color),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            category.title,
-                            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${category.questions.length} أسئلة',
-                            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<MatchmakingScreen> createState() => _MatchmakingScreenState();
 }
 
-// --- 2. شاشة اللعب والأسئلة مع العداد التنازلي وترتيب الأسئلة عشوائياً بكل جولة ---
-class QuizScreen extends StatefulWidget {
-  final Category category;
-
-  const QuizScreen({super.key, required this.category});
-
-  @override
-  State<QuizScreen> createState() => _QuizScreenState();
-}
-
-class _QuizScreenState extends State<QuizScreen> {
-  late List<Question> _roundQuestions;
-  int _currentIndex = 0;
-  int _score = 0;
-  int? _selectedAnswerIndex;
-  bool _isAnswered = false;
-
-  Timer? _timer;
-  int _timeLeft = 15; // 15 ثانية لكل سؤال
+class _MatchmakingScreenState extends State<MatchmakingScreen> {
+  int _searchTime = 0;
+  Timer? _matchTimer;
+  int _realPlayersFound = 1; // أنت اللاعب الأول
 
   @override
   void initState() {
     super.initState();
-    _startNewRound();
+    _startSearching();
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _matchTimer?.cancel();
     super.dispose();
   }
 
-  void _startNewRound() {
-    _roundQuestions = List.from(widget.category.questions)..shuffle(); // خلط الأسئلة عشوائياً لكل جولة
-    _currentIndex = 0;
-    _score = 0;
-    _resetQuestionState();
-  }
+  void _startSearching() {
+    _matchTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        _searchTime++;
+        
+        // محاكاة دخول لاعب حقيقي بعد ثانيتين (اختياري)
+        if (_searchTime == 2) {
+          _realPlayersFound = 2;
+        }
 
-  void _resetQuestionState() {
-    _selectedAnswerIndex = null;
-    _isAnswered = false;
-    _timeLeft = 15;
-    _startTimer();
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_timeLeft > 0) {
-        setState(() {
-          _timeLeft--;
-        });
-      } else {
-        _timer?.cancel();
-        _timeOutAnswer();
-      }
+        // إذا مرّت 6 ثوانٍ ولم يكتمل العدد 4، نقوم بإكمال الطاولة بـ بوتات (AI) ونبدأ اللعبة
+        if (_searchTime >= 6) {
+          _matchTimer?.cancel();
+          _goToTable(isUsingBots: true);
+        }
+      });
     });
   }
 
-  void _timeOutAnswer() {
-    if (_isAnswered) return;
-    setState(() {
-      _isAnswered = true;
-    });
-    _nextQuestionWithDelay();
-  }
-
-  void _answerQuestion(int index) {
-    if (_isAnswered) return;
-    _timer?.cancel();
-
-    setState(() {
-      _selectedAnswerIndex = index;
-      _isAnswered = true;
-      if (index == _roundQuestions[_currentIndex].correctAnswerIndex) {
-        _score++;
-      }
-    });
-
-    _nextQuestionWithDelay();
-  }
-
-  void _nextQuestionWithDelay() {
-    Future.delayed(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      if (_currentIndex < _roundQuestions.length - 1) {
-        setState(() {
-          _currentIndex++;
-          _resetQuestionState();
-        });
-      } else {
-        _showResultDialog();
-      }
-    });
-  }
-
-  void _showResultDialog() {
-    showDialog(
-      barrierDismissible: false,
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF0F3460),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('انتهت الجولة! 🎉', textAlign: TextAlign.center, style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('النتيجة النهائية:', style: TextStyle(color: Colors.grey.shade300, fontSize: 16)),
-            const SizedBox(height: 10),
-            Text('$_score / ${_roundQuestions.length}',
-                style: const TextStyle(color: Colors.amber, fontSize: 36, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              setState(() {
-                _startNewRound(); // جولة جديدة بترتيب أسئلة عشوائي
-              });
-            },
-            child: const Text('جولة جديدة (خلط الأسئلة)', style: TextStyle(color: Colors.greenAccent)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pop(context);
-            },
-            child: const Text('اختيار فئة أخرى'),
-          ),
-        ],
+  void _goToTable({required bool isUsingBots}) {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SmartBalootTableScreen(isUsingBots: isUsingBots, realPlayersCount: _realPlayersFound),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentQ = _roundQuestions[_currentIndex];
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.category.title),
-        backgroundColor: const Color(0xFF16213E),
+        title: const Text('البحث عن طاولة بلوت'),
+        backgroundColor: const Color(0xFF1B263B),
+        centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20.0),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const CircularProgressIndicator(color: Colors.amber, strokeWidth: 4),
+              const SizedBox(height: 30),
+              const Text(
+                'جاري البحث عن خصوم حقيقيين...',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'اللاعبون المتصلون الآن: $_realPlayersFound / 4',
+                style: const TextStyle(fontSize: 16, color: Colors.greenAccent),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'وقت الانتظار: $_searchTime ثوانٍ\n(إذا لم يكتمل العدد، سيتم إدخال بوتات تلقائياً)',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 40),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade800,
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                ),
+                onPressed: () {
+                  _matchTimer?.cancel();
+                  Navigator.pop(context);
+                },
+                child: const Text('إلغاء البحث'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- 2. طاولة اللعب الذكية (تدمج بين الحقيقيين والـ AI) ---
+class SmartBalootTableScreen extends StatelessWidget {
+  final bool isUsingBots;
+  final int realPlayersCount;
+
+  const SmartBalootTableScreen({
+    super.key,
+    required this.isUsingBots,
+    required this.realPlayersCount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(isUsingBots ? 'طاولة هجينة (أشخاص + بوتات AI)' : 'طاولة أونلاين حقيقية 100%'),
+        backgroundColor: const Color(0xFF1B263B),
+        centerTitle: true,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          color: Color(0xFF1B4332), // لون الطاولة الأخضر
+        ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            // شريط التقدم والعداد
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // الخصم الشمال (غالباً بوت أو حقيقي)
+            const Column(
               children: [
-                Text('السؤال ${_currentIndex + 1} من ${_roundQuestions.length}',
-                    style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                CircleAvatar(backgroundColor: Colors.orangeAccent, child: Icon(Icons.smart_toy)),
+                SizedBox(height: 4),
+                Text('الخصم 1 [بوت AI بديل]', style: TextStyle(color: Colors.white70, fontSize: 12)),
+              ],
+            ),
+
+            // منتصف الطاولة
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                const Column(
+                  children: [
+                    CircleAvatar(backgroundColor: Colors.blueAccent, child: Icon(Icons.person)),
+                    Text('الخصم 2 [لاعب حقيقي]', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: _timeLeft <= 5 ? Colors.redAccent.withOpacity(0.2) : Colors.amber.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(12),
+                    color: const Color(0xFF081C15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.amber, width: 2),
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Icon(Icons.timer, color: _timeLeft <= 5 ? Colors.redAccent : Colors.amber, size: 20),
-                      const SizedBox(width: 6),
-                      Text('$_timeLeft ثانية',
-                          style: TextStyle(
-                            color: _timeLeft <= 5 ? Colors.redAccent : Colors.amber,
-                            fontWeight: FontWeight.bold,
-                          )),
+                      const Icon(Icons.style, color: Colors.amber, size: 36),
+                      const SizedBox(height: 8),
+                      Text(
+                        isUsingBots ? 'طاولة مكتملة بـ (بوتات ذكية)' : 'طاولة أونلاين صافية',
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
                     ],
                   ),
                 ),
+                const Column(
+                  children: [
+                    CircleAvatar(backgroundColor: Colors.orangeAccent, child: Icon(Icons.smart_toy)),
+                    Text('خويك [بوت AI بديل]', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  ],
+                ),
               ],
             ),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(
-              value: _timeLeft / 15,
-              backgroundColor: Colors.white10,
-              color: _timeLeft <= 5 ? Colors.redAccent : widget.category.color,
-            ),
-            const SizedBox(height: 25),
 
-            // كارت السؤال
+            // أوراقك في الأسفل
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F3460),
-                borderRadius: BorderRadius.circular(16),
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                color: Color(0xFF081C15),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
               ),
-              child: Text(
-                currentQ.text,
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-            ),
-            const SizedBox(height: 25),
-
-            // قائمة خيارات الإجابة
-            Expanded(
-              child: ListView.builder(
-                itemCount: currentQ.options.length,
-                itemBuilder: (context, index) {
-                  Color buttonColor = const Color(0xFF16213E);
-
-                  if (_isAnswered) {
-                    if (index == currentQ.correctAnswerIndex) {
-                      buttonColor = Colors.green.shade700;
-                    } else if (index == _selectedAnswerIndex) {
-                      buttonColor = Colors.red.shade700;
-                    }
-                  }
-
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: buttonColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () => _answerQuestion(index),
-                      child: Text(
-                        currentQ.options[index],
-                        style: const TextStyle(color: Colors.white, fontSize: 16),
-                      ),
-                    ),
-                  );
-                },
+              child: const Column(
+                children: [
+                  Text('أنت تلعب الآن بانتظام مع ميزة القيد والمشاريع!', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 10),
+                  Text('♠ K   ♥ Q   ♦ 10   ♣ A   ♠ 9', style: TextStyle(color: Colors.white, fontSize: 20, letterSpacing: 4)),
+                ],
               ),
             ),
           ],
