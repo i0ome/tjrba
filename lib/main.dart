@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:record/record.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'dart:io';
 
 void main() {
   runApp(const LymonChatApp());
@@ -23,26 +26,54 @@ class LymonChatApp extends StatelessWidget {
   }
 }
 
-// نموذج بيانات المستخدم
+// --- نماذج البيانات ---
 class UserProfile {
   final String username;
   final String email;
   final String password;
+  final bool isAdmin;
 
-  UserProfile({required this.username, required this.email, required this.password});
+  UserProfile({
+    required this.username,
+    required this.email,
+    required this.password,
+    this.isAdmin = false,
+  });
 }
 
-// قاعدة بيانات محلية تجريبية للتطبيق
+class ChatMessage {
+  final String text;
+  final bool isMe;
+  final bool isVoice;
+  final String? voicePath;
+  int status; // 1: صح مرسل، 2: صحين واصل، 3: صحين زرق مقروء
+
+  ChatMessage({
+    required this.text,
+    required this.isMe,
+    this.isVoice = false,
+    this.voicePath,
+    this.status = 1,
+  });
+}
+
+// الحساب الإداري (مخفي عن العامة وموثق)
 final UserProfile adminUser = UserProfile(
   username: '@Lymon',
   email: 'Mmaymanmm2020@gmail.com',
   password: 'Mmaymanmm2020',
+  isAdmin: true,
 );
 
-List<UserProfile> registeredUsers = [adminUser];
+List<UserProfile> registeredUsers = [
+  adminUser,
+  UserProfile(username: '@ahmed', email: 'ahmed@app.com', password: '123'),
+  UserProfile(username: '@sara', email: 'sara@app.com', password: '123'),
+];
+
 UserProfile? currentUser;
 
-// --- 1. شاشة تسجيل الدخول وإنشاء الحساب ---
+// --- 1. شاشة تسجيل الدخول والإنشاء ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -57,26 +88,35 @@ class _AuthScreenState extends State<AuthScreen> {
   final _usernameController = TextEditingController();
 
   void _submit() {
-    String email = _emailController.text.trim();
+    String input = _emailController.text.trim();
     String password = _passwordController.text.trim();
     String username = _usernameController.text.trim();
 
     if (isLogin) {
-      // التحقق من تسجيل الدخول (يدعم الحساب الإداري أو أي حساب مسجل)
-      if ((email == adminUser.email || email == adminUser.username) && password == adminUser.password) {
-        currentUser = adminUser;
-      } else {
-        // تسجيل دخول افتراضي تجريبي
-        currentUser = UserProfile(username: username.isEmpty ? '@user' : username, email: email, password: password);
+      // التحقق من بيانات الإدارة سرا أو أي مستخدم مسجل
+      UserProfile? found;
+      for (var u in registeredUsers) {
+        if ((u.email == input || u.username == input) && u.password == password) {
+          found = u;
+          break;
+        }
       }
-      _navigateToHome();
+
+      if (found != null) {
+        currentUser = found;
+        _navigateToHome();
+      } else {
+        ScaffoldMessenger.contextOf(context)?.showSnackBar(
+          const SnackBar(content: Text('البريد أو الرمز غير صحيح')),
+        );
+      }
     } else {
-      // إنشاء حساب جديد
       if (!username.startsWith('@')) {
         username = '@$username';
       }
-      currentUser = UserProfile(username: username, email: email, password: password);
-      registeredUsers.add(currentUser!);
+      var newUser = UserProfile(username: username, email: input, password: password);
+      registeredUsers.add(newUser);
+      currentUser = newUser;
       _navigateToHome();
     }
   }
@@ -157,21 +197,11 @@ class _AuthScreenState extends State<AuthScreen> {
                 const SizedBox(height: 16),
 
                 TextButton(
-                  onPressed: () {
-                    setState(() {
-                      isLogin = !isLogin;
-                    });
-                  },
+                  onPressed: () => setState(() => isLogin = !isLogin),
                   child: Text(
                     isLogin ? 'ليس لديك حساب؟ إنشاء حساب جديد' : 'لديك حساب بالفعل؟ تسجيل الدخول',
                     style: const TextStyle(color: Color(0xFF00A884)),
                   ),
-                ),
-                const SizedBox(height: 20),
-                const Text(
-                  '💡 حساب الإداري التجريبي:\nالبريد: Mmaymanmm2020@gmail.com\nالرمز: Mmaymanmm2020\nالاسم: @Lymon',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
                 ),
               ],
             ),
@@ -182,7 +212,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// --- 2. الصفحة الرئيسية (الدردشات والجروبات) ---
+// --- 2. الصفحة الرئيسية والبحث الحقيقي ---
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -191,9 +221,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final List<String> chats = ['@Lymon (الحساب الإداري)', 'مجموعة التطوير الخاصة 👥'];
+  final List<String> myChats = ['@Lymai (المساعد الذكي 🤖)'];
 
-  void _addContactDialog() {
+  void _searchAndAddUser() {
     final controller = TextEditingController();
     showDialog(
       context: context,
@@ -209,14 +239,37 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A884)),
             onPressed: () {
-              if (controller.text.isNotEmpty) {
+              String query = controller.text.trim();
+              if (!query.startsWith('@')) query = '@$query';
+
+              // البحث الحقيقي في النظام
+              bool exists = registeredUsers.any((u) => u.username.toLowerCase() == query.toLowerCase());
+
+              Navigator.pop(context);
+
+              if (exists) {
                 setState(() {
-                  chats.add(controller.text.startsWith('@') ? controller.text : '@${controller.text}');
+                  if (!myChats.contains(query)) myChats.add(query);
                 });
-                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('تم العثور على المستخدم وإضافته: $query')),
+                );
+              } else {
+                // المستخدم غير موجود حقاً
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: const Color(0xFF202C33),
+                    title: const Text('عذراً'),
+                    content: const Text('المستخدم غير موجود في النظام!'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('حسناً'))
+                    ],
+                  ),
+                );
               }
             },
-            child: const Text('إضافة'),
+            child: const Text('بحث وإضافة'),
           ),
         ],
       ),
@@ -241,7 +294,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () {
               if (controller.text.isNotEmpty) {
                 setState(() {
-                  chats.add('${controller.text} 👥');
+                  myChats.add('${controller.text} 👥');
                 });
                 Navigator.pop(context);
               }
@@ -255,82 +308,176 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    bool isAdmin = currentUser?.isAdmin ?? false;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text('Lymon Chat (${currentUser?.username ?? ""})'),
+        title: Row(
+          children: [
+            Text('Lymon Chat (${currentUser?.username ?? ""})'),
+            if (isAdmin) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.verified, color: Colors.amber, size: 20), // صح ذهبية للإدارة
+            ]
+          ],
+        ),
         backgroundColor: const Color(0xFF202C33),
         actions: [
           IconButton(icon: const Icon(Icons.group_add), onPressed: _createGroupDialog),
         ],
       ),
       body: ListView.builder(
-        itemCount: chats.length,
+        itemCount: myChats.length,
         itemBuilder: (context, index) {
+          bool isAI = myChats[index].contains('Lymai');
           return ListTile(
             leading: CircleAvatar(
-              backgroundColor: const Color(0xFF00A884),
-              child: Text(chats[index][0], style: const TextStyle(color: Colors.white)),
+              backgroundColor: isAI ? Colors.indigo : const Color(0xFF00A884),
+              child: Icon(isAI ? Icons.smart_toy : Icons.person, color: Colors.white),
             ),
-            title: Text(chats[index], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            subtitle: const Text('انقر لبدء المحادثة...', style: TextStyle(color: Colors.grey)),
+            title: Row(
+              children: [
+                Text(myChats[index], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                if (myChats[index] == '@Lymon') ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.verified, color: Colors.amber, size: 16),
+                ]
+              ],
+            ),
+            subtitle: const Text('انقر لفتح الدردشة...', style: TextStyle(color: Colors.grey)),
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => ChatScreen(chatName: chats[index])),
+                MaterialPageRoute(
+                  builder: (context) => ChatScreen(chatName: myChats[index], isAI: isAI),
+                ),
               );
             },
           );
         },
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          FloatingActionButton(
-            heroTag: 'group',
-            backgroundColor: const Color(0xFF202C33),
-            onPressed: _createGroupDialog,
-            child: const Icon(Icons.group, color: Colors.white),
-          ),
-          const SizedBox(height: 10),
-          FloatingActionButton(
-            heroTag: 'contact',
-            backgroundColor: const Color(0xFF00A884),
-            onPressed: _addContactDialog,
-            child: const Icon(Icons.person_add, color: Colors.white),
-          ),
-        ],
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF00A884),
+        onPressed: _searchAndAddUser,
+        child: const Icon(Icons.person_add, color: Colors.white),
       ),
     );
   }
 }
 
-// --- 3. شاشة المحادثة وتسجيل الفويس (Voice Notes) ---
+// --- 3. شاشة المحادثة (الفويس الحقيقي + الصحين الزرق + شات Lymai) ---
 class ChatScreen extends StatefulWidget {
   final String chatName;
-  const ChatScreen({super.key, required this.chatName});
+  final bool isAI;
+
+  const ChatScreen({super.key, required this.chatName, required this.isAI});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final List<String> messages = ['مرحباً بك في المحادثة!'];
+  final List<ChatMessage> messages = [
+    ChatMessage(text: 'مرحباً بك في الدردشة!', isMe: false, status: 3)
+  ];
   final _msgController = TextEditingController();
-  bool isRecordingVoice = false;
 
-  void _sendMessage() {
-    if (_msgController.text.isNotEmpty) {
-      setState(() {
-        messages.add(_msgController.text);
-        _msgController.clear();
+  // أدوات تسجيل الصوت الحقيقي
+  final _audioRecorder = AudioRecorder();
+  final _audioPlayer = AudioPlayer();
+  bool isRecording = false;
+  String? recordedPath;
+
+  @override
+  void initState() {
+    super.initState();
+    // محاكاة وصول الرسائل وصنعتها (صحين زرق بعد ثانية)
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        setState(() {
+          for (var m in messages) {
+            m.status = 3; // صحين زرق (قراءة)
+          }
+        });
+      }
+    });
+  }
+
+  void _sendMessage({String? text, bool isVoice = false, String? path}) {
+    String content = text ?? (isVoice ? '🎤 [رسالة صوتية حقيقية]' : '');
+    if (content.isEmpty) return;
+
+    setState(() {
+      messages.add(ChatMessage(
+        text: content,
+        isMe: true,
+        isVoice: isVoice,
+        voicePath: path,
+        status: 1, // صح واحد (أرسلت)
+      ));
+    });
+    _msgController.clear();
+
+    // محاكاة مراحل وصول الرسالة للطرف الآخر
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) setState(() => messages.last.status = 2); // صحين رمادي (وصلت)
+    });
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      if (mounted) setState(() => messages.last.status = 3); // صحين زرق (شوهدت)
+    });
+
+    // إذا كانت المحادثة مع Lymai (الذكاء الاصطناعي)
+    if (widget.isAI && !isVoice) {
+      Future.delayed(const Duration(milliseconds: 2000), () {
+        if (mounted) {
+          setState(() {
+            messages.add(ChatMessage(
+              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. كيف أقدر أساعدك اليوم؟',
+              isMe: false,
+              status: 3,
+            ));
+          });
+        }
       });
     }
   }
 
-  void _sendVoiceNote() {
-    setState(() {
-      messages.add('🎤 [رسالة صوتية Voice Note (0:05)]');
-    });
+  // بدء تسجيل الفويس الحقيقي
+  Future<void> _startRecording() async {
+    try {
+      if (await _audioRecorder.hasPermission()) {
+        final directory = Directory.systemTemp;
+        String path = '${directory.path}/audio_note.m4a';
+        await _audioRecorder.start(const RecordConfig(), path: path);
+        setState(() {
+          isRecording = true;
+          recordedPath = path;
+        });
+      }
+    } catch (e) {
+      debugPrint('خطأ في التسجيل: $e');
+    }
+  }
+
+  // إيقاف التسجيل وإرساله
+  Future<void> _stopRecording() async {
+    try {
+      final path = await _audioRecorder.stop();
+      setState(() {
+        isRecording = false;
+      });
+      if (path != null) {
+        _sendMessage(isVoice: true, path: path);
+      }
+    } catch (e) {
+      debugPrint('خطأ في إيقاف التسجيل: $e');
+    }
+  }
+
+  // تشغيل الفويس المسجل
+  Future<void> _playVoice(String path) async {
+    Source urlSource = UrlSource(path);
+    await _audioPlayer.play(urlSource);
   }
 
   @override
@@ -347,16 +494,52 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.all(16),
               itemCount: messages.length,
               itemBuilder: (context, index) {
+                final msg = messages[index];
                 return Align(
-                  alignment: Alignment.centerRight,
+                  alignment: msg.isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF005C4B),
+                      color: msg.isMe ? const Color(0xFF005C4B) : const Color(0xFF202C33),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(messages[index], style: const TextStyle(color: Colors.white, fontSize: 16)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        msg.isVoice
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.play_arrow, color: Colors.white),
+                                    onPressed: () => _playVoice(msg.voicePath ?? ''),
+                                  ),
+                                  const Text('رسالة صوتية (سماع)', style: TextStyle(color: Colors.white)),
+                                ],
+                              )
+                            : Text(msg.text, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                        const SizedBox(height: 4),
+                        if (msg.isMe)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                msg.status == 1
+                                    ? '✓'
+                                    : msg.status == 2
+                                        ? '✓✓'
+                                        : '✓✓',
+                                style: TextStyle(
+                                  color: msg.status == 3 ? Colors.blueAccent : Colors.grey,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          )
+                      ],
+                    ),
                   ),
                 );
               },
@@ -371,7 +554,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   child: TextField(
                     controller: _msgController,
                     decoration: InputDecoration(
-                      hintText: 'اكتب رسالة...',
+                      hintText: widget.isAI ? 'تحدث مع Lymai...' : 'اكتب رسالة...',
                       filled: true,
                       fillColor: const Color(0xFF2A3942),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
@@ -381,23 +564,17 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 const SizedBox(width: 8),
                 GestureDetector(
-                  onLongPressStart: (_) => setState(() => isRecordingVoice = true),
-                  onLongPressEnd: (_) {
-                    setState(() => isRecordingVoice = false);
-                    _sendVoiceNote();
-                  },
+                  onTapDown: (_) => _startRecording(),
+                  onTapUp: (_) => _stopRecording(),
                   child: CircleAvatar(
-                    backgroundColor: isRecordingVoice ? Colors.red : const Color(0xFF00A884),
-                    child: IconButton(
-                      icon: const Icon(Icons.mic, color: Colors.white),
-                      onPressed: _sendVoiceNote, // ضغطة لإرسال فويس تجريبي أو مطول
-                    ),
+                    backgroundColor: isRecording ? Colors.red : const Color(0xFF00A884),
+                    child: const Icon(Icons.mic, color: Colors.white),
                   ),
                 ),
                 const SizedBox(width: 4),
                 IconButton(
                   icon: const Icon(Icons.send, color: Color(0xFF00A884)),
-                  onPressed: _sendMessage,
+                  onPressed: () => _sendMessage(text: _msgController.text),
                 ),
               ],
             ),
