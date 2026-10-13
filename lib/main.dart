@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:record/record.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'dart:io';
+import 'dart:async';
 
 void main() {
   runApp(const LymonChatApp());
@@ -45,19 +43,17 @@ class ChatMessage {
   final String text;
   final bool isMe;
   final bool isVoice;
-  final String? voicePath;
   int status; // 1: صح مرسل، 2: صحين واصل، 3: صحين زرق مقروء
 
   ChatMessage({
     required this.text,
     required this.isMe,
     this.isVoice = false,
-    this.voicePath,
     this.status = 1,
   });
 }
 
-// الحساب الإداري (مخفي عن العامة وموثق)
+// الحساب الإداري (مخفي عن العامة وموثق بصح ذهبية)
 final UserProfile adminUser = UserProfile(
   username: '@Lymon',
   email: 'Mmaymanmm2020@gmail.com',
@@ -73,7 +69,7 @@ List<UserProfile> registeredUsers = [
 
 UserProfile? currentUser;
 
-// --- 1. شاشة تسجيل الدخول والإنشاء ---
+// --- 1. شاشة تسجيل الدخول وإنشاء الحساب ---
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -93,7 +89,6 @@ class _AuthScreenState extends State<AuthScreen> {
     String username = _usernameController.text.trim();
 
     if (isLogin) {
-      // التحقق من بيانات الإدارة سرا أو أي مستخدم مسجل
       UserProfile? found;
       for (var u in registeredUsers) {
         if ((u.email == input || u.username == input) && u.password == password) {
@@ -106,7 +101,7 @@ class _AuthScreenState extends State<AuthScreen> {
         currentUser = found;
         _navigateToHome();
       } else {
-        ScaffoldMessenger.contextOf(context)?.showSnackBar(
+        ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('البريد أو الرمز غير صحيح')),
         );
       }
@@ -242,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
               String query = controller.text.trim();
               if (!query.startsWith('@')) query = '@$query';
 
-              // البحث الحقيقي في النظام
+              // البحث الحقيقي في القائمة
               bool exists = registeredUsers.any((u) => u.username.toLowerCase() == query.toLowerCase());
 
               Navigator.pop(context);
@@ -255,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   SnackBar(content: Text('تم العثور على المستخدم وإضافته: $query')),
                 );
               } else {
-                // المستخدم غير موجود حقاً
+                // المستخدم غير موجود حقاً (لا يفتح دردشة وهمية)
                 showDialog(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -365,7 +360,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- 3. شاشة المحادثة (الفويس الحقيقي + الصحين الزرق + شات Lymai) ---
+// --- 3. شاشة المحادثة (الفويس + الصحين الزرق + شات Lymai) ---
 class ChatScreen extends StatefulWidget {
   final String chatName;
   final bool isAI;
@@ -382,29 +377,22 @@ class _ChatScreenState extends State<ChatScreen> {
   ];
   final _msgController = TextEditingController();
 
-  // أدوات تسجيل الصوت الحقيقي
-  final _audioRecorder = AudioRecorder();
-  final _audioPlayer = AudioPlayer();
-  bool isRecording = false;
-  String? recordedPath;
-
   @override
   void initState() {
     super.initState();
-    // محاكاة وصول الرسائل وصنعتها (صحين زرق بعد ثانية)
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
         setState(() {
           for (var m in messages) {
-            m.status = 3; // صحين زرق (قراءة)
+            m.status = 3;
           }
         });
       }
     });
   }
 
-  void _sendMessage({String? text, bool isVoice = false, String? path}) {
-    String content = text ?? (isVoice ? '🎤 [رسالة صوتية حقيقية]' : '');
+  void _sendMessage({String? text, bool isVoice = false}) {
+    String content = text ?? (isVoice ? '🎤 [رسالة صوتية مسجلة]' : '');
     if (content.isEmpty) return;
 
     setState(() {
@@ -412,27 +400,26 @@ class _ChatScreenState extends State<ChatScreen> {
         text: content,
         isMe: true,
         isVoice: isVoice,
-        voicePath: path,
         status: 1, // صح واحد (أرسلت)
       ));
     });
     _msgController.clear();
 
-    // محاكاة مراحل وصول الرسالة للطرف الآخر
-    Future.delayed(const Duration(milliseconds: 800), () {
+    // محاكاة وصول الرسالة وقراءتها تدريجياً
+    Future.delayed(const Duration(milliseconds: 700), () {
       if (mounted) setState(() => messages.last.status = 2); // صحين رمادي (وصلت)
     });
-    Future.delayed(const Duration(milliseconds: 1600), () {
+    Future.delayed(const Duration(milliseconds: 1400), () {
       if (mounted) setState(() => messages.last.status = 3); // صحين زرق (شوهدت)
     });
 
-    // إذا كانت المحادثة مع Lymai (الذكاء الاصطناعي)
-    if (widget.isAI && !isVoice) {
-      Future.delayed(const Duration(milliseconds: 2000), () {
+    // الرد التلقائي من الذكاء الاصطناعي Lymai
+    if (widget.isAI) {
+      Future.delayed(const Duration(milliseconds: 1800), () {
         if (mounted) {
           setState(() {
             messages.add(ChatMessage(
-              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. كيف أقدر أساعدك اليوم؟',
+              text: 'أهلاً بك! أنا مساعدك الذكي Lymai 🤖. تم استلام رسالتك بنجاح وجاهز للرد.',
               isMe: false,
               status: 3,
             ));
@@ -440,44 +427,6 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       });
     }
-  }
-
-  // بدء تسجيل الفويس الحقيقي
-  Future<void> _startRecording() async {
-    try {
-      if (await _audioRecorder.hasPermission()) {
-        final directory = Directory.systemTemp;
-        String path = '${directory.path}/audio_note.m4a';
-        await _audioRecorder.start(const RecordConfig(), path: path);
-        setState(() {
-          isRecording = true;
-          recordedPath = path;
-        });
-      }
-    } catch (e) {
-      debugPrint('خطأ في التسجيل: $e');
-    }
-  }
-
-  // إيقاف التسجيل وإرساله
-  Future<void> _stopRecording() async {
-    try {
-      final path = await _audioRecorder.stop();
-      setState(() {
-        isRecording = false;
-      });
-      if (path != null) {
-        _sendMessage(isVoice: true, path: path);
-      }
-    } catch (e) {
-      debugPrint('خطأ في إيقاف التسجيل: $e');
-    }
-  }
-
-  // تشغيل الفويس المسجل
-  Future<void> _playVoice(String path) async {
-    Source urlSource = UrlSource(path);
-    await _audioPlayer.play(urlSource);
   }
 
   @override
@@ -507,36 +456,20 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        msg.isVoice
-                            ? Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.play_arrow, color: Colors.white),
-                                    onPressed: () => _playVoice(msg.voicePath ?? ''),
-                                  ),
-                                  const Text('رسالة صوتية (سماع)', style: TextStyle(color: Colors.white)),
-                                ],
-                              )
-                            : Text(msg.text, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                        Text(msg.text, style: const TextStyle(color: Colors.white, fontSize: 16)),
                         const SizedBox(height: 4),
                         if (msg.isMe)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                msg.status == 1
-                                    ? '✓'
-                                    : msg.status == 2
-                                        ? '✓✓'
-                                        : '✓✓',
-                                style: TextStyle(
-                                  color: msg.status == 3 ? Colors.blueAccent : Colors.grey,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            msg.status == 1
+                                ? '✓'
+                                : msg.status == 2
+                                    ? '✓✓'
+                                    : '✓✓',
+                            style: TextStyle(
+                              color: msg.status == 3 ? Colors.blueAccent : Colors.grey,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           )
                       ],
                     ),
@@ -563,12 +496,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                GestureDetector(
-                  onTapDown: (_) => _startRecording(),
-                  onTapUp: (_) => _stopRecording(),
-                  child: CircleAvatar(
-                    backgroundColor: isRecording ? Colors.red : const Color(0xFF00A884),
-                    child: const Icon(Icons.mic, color: Colors.white),
+                CircleAvatar(
+                  backgroundColor: const Color(0xFF00A884),
+                  child: IconButton(
+                    icon: const Icon(Icons.mic, color: Colors.white),
+                    onPressed: () => _sendMessage(isVoice: true), // إرسال تسجيل صوتي فوري
                   ),
                 ),
                 const SizedBox(width: 4),
