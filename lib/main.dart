@@ -118,21 +118,21 @@ final UserProfile ownerUser = UserProfile(
   username: '@Lymon',
   email: 'Mmaymanmm2020@gmail.com',
   password: 'Mmaymanmm2020',
-  avatarUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=500', 
+  avatarUrl: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=500',
   isOwner: true,
   badgeType: 'gold',
 );
 
 List<UserProfile> registeredUsers = [
   ownerUser,
-  UserProfile(username: '@ahmed', email: 'ahmed@app.com', password: '123', badgeType: 'green'), // إداري
-  UserProfile(username: '@sara', email: 'sara@app.com', password: '123', badgeType: 'blue'),
+  UserProfile(username: '@ahmed', email: 'ahmed@app.com', password: '123', badgeType: 'green'), // إداري بالصح الأخضر
+  UserProfile(username: '@sara', email: 'sara@app.com', password: '123', badgeType: 'blue'),  // موثق بالصح الأزرق
 ];
 
 List<ChatRoom> allActiveChats = [];
 List<Ticket> allTickets = [];
 List<TweetPost> allTweets = [
-  TweetPost(id: '1', author: '@Lymon', authorBadge: 'gold', content: 'مرحباً بكم في التحديث الجديد لـ Lymon Chat Pro! 🎉'),
+  TweetPost(id: '1', author: '@Lymon', authorBadge: 'gold', content: 'مرحباً بكم في Lymon Chat Pro! 🎉'),
 ];
 
 UserProfile? currentUser;
@@ -249,7 +249,7 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// --- 2. الصفحة الرئيسية (الدردشات والتغريدات والإشعارات) ---
+// --- 2. الصفحة الرئيسية ---
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -304,8 +304,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool hasAdminPower = currentUser?.isOwner == true || currentUser?.badgeType == 'green';
-
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -340,7 +338,6 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          // 1. قائمة الدردشات
           ListView.builder(
             itemCount: myChats.length,
             itemBuilder: (context, index) {
@@ -386,8 +383,6 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-
-          // 2. صفحة التغريدات النصية والتفاعل
           const TweetsFeedScreen(),
         ],
       ),
@@ -413,7 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// --- 3. صفحة التغريدات الكتابية والمشاركة ---
+// --- 3. صفحة التغريدات ---
 class TweetsFeedScreen extends StatefulWidget {
   const TweetsFeedScreen({super.key});
 
@@ -440,28 +435,6 @@ class _TweetsFeedScreenState extends State<TweetsFeedScreen> {
     });
   }
 
-  void _shareTweetWithFriends(TweetPost tweet) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF202C33),
-        title: const Text('مشاركة التغريدة مع المتابعين'),
-        content: const Text('سيتم مشاركة رابط التغريدة في دردشات أصدقائك.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A884)),
-            onPressed: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم مشاركة التغريدة بنجاح!')));
-            },
-            child: const Text('مشاركة الآن'),
-          )
-        ],
-      ),
-    );
-  }
-
   Widget _getBadgeIcon(String badge) {
     if (badge == 'gold') return const Icon(Icons.verified, color: Colors.amber, size: 16);
     if (badge == 'green') return const Icon(Icons.verified, color: Colors.green, size: 16);
@@ -481,7 +454,7 @@ class _TweetsFeedScreenState extends State<TweetsFeedScreen> {
               Expanded(
                 child: TextField(
                   controller: _tweetController,
-                  decoration: const InputDecoration(hintText: 'ماذا يدور في ذهنك؟ اكتب تغريدة...'),
+                  decoration: const InputDecoration(hintText: 'اكتب تغريدة جديدة...'),
                 ),
               ),
               IconButton(icon: const Icon(Icons.send, color: Color(0xFF00A884)), onPressed: _postTweet),
@@ -514,31 +487,22 @@ class _TweetsFeedScreenState extends State<TweetsFeedScreen> {
                       Text(post.content, style: const TextStyle(fontSize: 16, color: Colors.white70)),
                       const SizedBox(height: 8),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Row(
-                            children: [
-                              IconButton(
-                                icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.red : Colors.grey),
-                                onPressed: () {
-                                  setState(() {
-                                    if (isLiked) {
-                                      post.likedBy.remove(currentUser!.username);
-                                      post.likes--;
-                                    } else {
-                                      post.likedBy.add(currentUser!.username);
-                                      post.likes++;
-                                    }
-                                  });
-                                },
-                              ),
-                              Text('${post.likes}', style: const TextStyle(color: Colors.grey)),
-                            ],
-                          ),
                           IconButton(
-                            icon: const Icon(Icons.share, color: Colors.grey),
-                            onPressed: () => _shareTweetWithFriends(post),
+                            icon: Icon(isLiked ? Icons.favorite : Icons.favorite_border, color: isLiked ? Colors.red : Colors.grey),
+                            onPressed: () {
+                              setState(() {
+                                if (isLiked) {
+                                  post.likedBy.remove(currentUser!.username);
+                                  post.likes--;
+                                } else {
+                                  post.likedBy.add(currentUser!.username);
+                                  post.likes++;
+                                }
+                              });
+                            },
                           ),
+                          Text('${post.likes}', style: const TextStyle(color: Colors.grey)),
                         ],
                       )
                     ],
@@ -564,7 +528,7 @@ class NotificationsScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('الإشعارات'), backgroundColor: const Color(0xFF202C33)),
       body: list.isEmpty
-          ? const Center(child: Text('لا توجد إشعارات جديدة حالياً', style: TextStyle(color: Colors.grey)))
+          ? const Center(child: Text('لا توجد إشعارات حالياً', style: TextStyle(color: Colors.grey)))
           : ListView.builder(
               itemCount: list.length,
               itemBuilder: (context, index) {
@@ -580,7 +544,7 @@ class NotificationsScreen extends StatelessWidget {
   }
 }
 
-// --- 5. شاشة ملف الشخص (رفع الصورة، الفولو، والإشعار) ---
+// --- 5. شاشة ملف المستخدِم ولوحة التوثيق ---
 class UserProfileScreen extends StatefulWidget {
   final UserProfile user;
   const UserProfileScreen({super.key, required this.user});
@@ -593,7 +557,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   @override
   Widget build(BuildContext context) {
     bool isFollowing = currentUser!.following.contains(widget.user.username);
-    bool hasAdminPower = currentUser!.isOwner || currentUser!.badgeType == 'green';
+    bool isOwner = currentUser!.isOwner;
+    bool isAdminGreen = currentUser!.badgeType == 'green';
 
     return Scaffold(
       appBar: AppBar(title: Text('ملف ${widget.user.username}'), backgroundColor: const Color(0xFF202C33)),
@@ -640,7 +605,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   } else {
                     currentUser!.following.add(widget.user.username);
                     widget.user.followers.add(currentUser!.username);
-                    // إرسال إشعار للشخص المضاف
                     widget.user.notifications.insert(
                       0,
                       AppNotification(
@@ -655,18 +619,52 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
               child: Text(isFollowing ? 'إلغاء المتابعة' : 'فولو (متابعة)'),
             ),
             const SizedBox(height: 16),
-            if (hasAdminPower && widget.user.badgeType != 'gold') ...[
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800, minimumSize: const Size.fromHeight(45)),
-                onPressed: () {
-                  setState(() {
-                    widget.user.isBanned = true;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم تبنيد الحساب بنجاح!')));
-                },
-                child: const Text('تبنيد الحساب ⛔'),
+
+            // صُلاحيات المالك @Lymon (منح وسحب الصح الأخضر والأزرق)
+            if (isOwner && widget.user.badgeType != 'gold') ...[
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+                    onPressed: () {
+                      setState(() => widget.user.badgeType = 'green');
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم منح الصح الأخضر الإداري!')));
+                    },
+                    child: const Text('منح صح أخضر 🟢'),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                    onPressed: () {
+                      setState(() => widget.user.badgeType = 'blue');
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم منح الصح الأزرق!')));
+                    },
+                    child: const Text('منح صح أزرق 🔵'),
+                  ),
+                ],
               ),
-            ]
+              const SizedBox(height: 8),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade800, minimumSize: const Size.fromHeight(40)),
+                onPressed: () {
+                  setState(() => widget.user.badgeType = 'none');
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم سحب التوثيق من المستخدم!')));
+                },
+                child: const Text('سحب التوثيق ⛔'),
+              ),
+            ],
+
+            // صلاحيات الإداري (الصح الأخضر) لمنح الصح الأزرق فقط
+            if (isAdminGreen && widget.user.badgeType == 'none') ...[
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent, minimumSize: const Size.fromHeight(40)),
+                onPressed: () {
+                  setState(() => widget.user.badgeType = 'blue');
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم منح الصح الأزرق من الإداري!')));
+                },
+                child: const Text('منح صح أزرق 🔵'),
+              ),
+            ],
           ],
         ),
       ),
@@ -674,7 +672,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 }
 
-// --- 6. إعدادات الحساب مع اختيار وتحديث الصورة ---
+// --- 6. إعدادات الحساب والأذونات ورفع الصور ---
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 
@@ -685,6 +683,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _nameController;
   late final TextEditingController _avatarController;
+  bool _notificationsAllowed = true;
 
   @override
   void initState() {
@@ -701,6 +700,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Navigator.pop(context);
   }
 
+  void _uploadFromDevice() {
+    // محاكاة واجهة اختيار ورفع صورة من الاستوديو
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        color: const Color(0xFF202C33),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('رفع صورة من الجهاز 📸', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+            const SizedBox(height: 16),
+            ListTile(
+              leading: const Icon(Icons.photo_library, color: Color(0xFF00A884)),
+              title: const Text('اختيار من معرض الصور'),
+              onTap: () {
+                Navigator.pop(ctx);
+                setState(() {
+                  _avatarController.text = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=500';
+                });
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم رفع الصورة بنجاح!')));
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _logout() {
     currentUser = null;
     Navigator.pushAndRemoveUntil(
@@ -713,14 +741,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('إعدادات الحساب'), backgroundColor: const Color(0xFF202C33)),
+      appBar: AppBar(title: const Text('إعدادات الحساب والأذونات'), backgroundColor: const Color(0xFF202C33)),
       body: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'تغيير الاسم')),
+            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'تغيير اسم المستخدم')),
             const SizedBox(height: 16),
-            TextField(controller: _avatarController, decoration: const InputDecoration(labelText: 'رابط الصورة أو رفع صورة المعرض')),
+            Row(
+              children: [
+                Expanded(child: TextField(controller: _avatarController, decoration: const InputDecoration(labelText: 'رابط الصورة الشخصية'))),
+                IconButton(
+                  icon: const Icon(Icons.upload_file, color: Color(0xFF00A884)),
+                  onPressed: _uploadFromDevice,
+                  tooltip: 'رفع صورة من المعرض',
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            SwitchListTile(
+              title: const Text('إذونات إشعارات الجهاز 🔔'),
+              subtitle: const Text('السماح للتطبيق بإرسال تنبيهات في شريط الإشعارات'),
+              value: _notificationsAllowed,
+              activeColor: const Color(0xFF00A884),
+              onChanged: (val) => setState(() => _notificationsAllowed = val),
+            ),
             const SizedBox(height: 24),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00A884), minimumSize: const Size.fromHeight(50)),
@@ -741,7 +787,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 }
 
-// --- 7. نظام التذاكر للعملاء والإدارة (الصح الأخضر يملك الصلاحية للرد) ---
+// --- 7. نظام التذاكر للعملاء والإدارة ---
 class TicketsScreen extends StatefulWidget {
   const TicketsScreen({super.key});
 
@@ -923,7 +969,6 @@ class _ChatScreenState extends State<ChatScreen> {
           (u) => u.username == widget.chatName,
           orElse: () => UserProfile(username: '', email: '', password: ''),
         );
-        // إضافة إشعار رسالة جديدة للطرف الآخر
         peer.notifications.insert(
           0,
           AppNotification(
